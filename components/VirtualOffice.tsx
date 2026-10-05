@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import type { SimpleIcon } from "simple-icons";
+import { siReact, siNextdotjs, siTypescript, siTailwindcss, siNodedotjs, siPostgresql, siFirebase, siFigma, siGit, siGithub, siGmail } from "simple-icons";
 
 const TILE = 32;
 const SPEED = 2.2;
@@ -144,14 +146,14 @@ function drawOffice(g: CanvasRenderingContext2D) {
 }
 
 // ====== PORTFOLIO CONTENT (edit the text, links, and name in this section) ======
-type Item = { title: string; text: string; link?: { label: string; url: string } };
+type Item = { title: string; text: string; link?: { label: string; url: string }; icons?: SimpleIcon[] };
 type Hotspot = { id: string; label: string; emoji: string; color: string; at: [number, number]; pin: [number, number]; r: number; intro?: string; items?: Item[] };
 const PROFILE = {
   name: "Your Name",
   role: "Web Developer & UI Designer",
   tagline: "Welcome to my virtual office. Walk around, step up to an icon, then press the action button (or E).",
 };
-const it = (title: string, text: string, link?: Item["link"]): Item => ({ title, text, link });
+const it = (title: string, text: string, link?: Item["link"], icons?: SimpleIcon[]): Item => ({ title, text, link, icons });
 const HOTSPOTS: Hotspot[] = [
   { id: "about", label: "About Me", emoji: "👤", color: "#74b9ff", at: [96, 107], pin: [96, 50], r: 46,
     intro: "Hi! I'm Your Name, a web developer who loves building digital products that are clean and a pleasure to use.",
@@ -160,15 +162,15 @@ const HOTSPOTS: Hotspot[] = [
             it("What I'm looking for", "Job opportunities, freelance projects, or collaborations in web and digital products.")] },
   { id: "projects", label: "Projects", emoji: "💼", color: "#ff7675", at: [160, 107], pin: [160, 50], r: 46,
     intro: "Here are a few of my favorite projects. Pick one to see the details.",
-    items: [it("2D Virtual Office", "This very portfolio. Built with React and Canvas: an office map, moving characters, and a dialog system."),
+    items: [it("2D Virtual Office", "This very portfolio. Built with React and Canvas: an office map, moving characters, and a dialog system.", undefined, [siReact, siNextdotjs, siTypescript]),
             it("Project 2 (replace)", "Short description: the problem solved, your role, and the technologies used.", { label: "View project", url: "https://github.com/" }),
             it("Project 3 (replace)", "Short description of the third project and its results or impact.", { label: "View project", url: "https://github.com/" })] },
   { id: "skills", label: "Skills", emoji: "🛠", color: "#55efc4", at: [224, 107], pin: [224, 50], r: 46,
     intro: "The tools I use every day:",
-    items: [it("Front-end", "React, Next.js, TypeScript, Tailwind CSS, HTML Canvas."),
-            it("Back-end & data", "Node.js, REST APIs, PostgreSQL, Firebase."),
-            it("Design", "Figma, design systems, prototyping, and basic user research."),
-            it("Ways of working", "Git, code review, and teamwork in agile environments.")] },
+    items: [it("Front-end", "React, Next.js, TypeScript, Tailwind CSS, HTML Canvas.", undefined, [siReact, siNextdotjs, siTypescript, siTailwindcss]),
+            it("Back-end & data", "Node.js, REST APIs, PostgreSQL, Firebase.", undefined, [siNodedotjs, siPostgresql, siFirebase]),
+            it("Design", "Figma, design systems, prototyping, and basic user research.", undefined, [siFigma]),
+            it("Ways of working", "Git, code review, and teamwork in agile environments.", undefined, [siGit, siGithub])] },
   { id: "exp", label: "Experience", emoji: "📈", color: "#fdcb6e", at: [288, 107], pin: [288, 50], r: 46,
     intro: "My career journey so far:",
     items: [it("2024 - present", "Job title and company (replace). Add 1-2 measurable achievements."),
@@ -195,9 +197,9 @@ const HOTSPOTS: Hotspot[] = [
             it("Anime", "I'm an anime fan. That's why L, Misa, and Ryuk are wandering around this office.")] },
   { id: "contact", label: "Contact", emoji: "✉", color: "#fd79a8", at: [320, 408], pin: [320, 392], r: 48,
     intro: "My door is always open. Reach me through:",
-    items: [it("Email", "I usually reply within 1-2 business days.", { label: "Send email", url: "mailto:nama@email.com" }),
+    items: [it("Email", "I usually reply within 1-2 business days.", { label: "Send email", url: "mailto:nama@email.com" }, [siGmail]),
             it("LinkedIn", "Let's connect professionally.", { label: "Open LinkedIn", url: "https://www.linkedin.com/" }),
-            it("GitHub", "My code and projects live here.", { label: "Open GitHub", url: "https://github.com/" })] },
+            it("GitHub", "My code and projects live here.", { label: "Open GitHub", url: "https://github.com/" }, [siGithub])] },
   { id: "desk", label: "Mystery Desk", emoji: "📓", color: "#e17055", at: [DESK.x + DESK.w / 2, DESK.y + DESK.h / 2], pin: [DESK.x + DESK.w / 2, DESK.y - 28], r: 80 },
 ];
 
@@ -375,7 +377,7 @@ function drawChar(
 
 // ====== DIALOG ======
 type Choice = { label: string; next: string | null };
-type DNode = { text: string; choices: Choice[]; link?: { label: string; url: string } };
+type DNode = { text: string; choices: Choice[]; link?: { label: string; url: string }; icons?: SimpleIcon[] };
 
 // Key = "speaker.id". next = null closes the dialog.
 const DIALOGS: Record<string, DNode> = {
@@ -452,7 +454,7 @@ for (const h of HOTSPOTS) {
   if (!h.items) continue;
   DIALOGS[`${h.id}.start`] = { text: h.intro ?? "", choices: h.items.map((q, i) => ({ label: q.title, next: `${h.id}.i${i}` })) };
   h.items.forEach((q, i) => {
-    DIALOGS[`${h.id}.i${i}`] = { text: q.text, link: q.link, choices: [{ label: "Back to list", next: `${h.id}.start` }, { label: "Done", next: null }] };
+    DIALOGS[`${h.id}.i${i}`] = { text: q.text, link: q.link, icons: q.icons, choices: [{ label: "Back to list", next: `${h.id}.start` }, { label: "Done", next: null }] };
   });
 }
 
@@ -520,6 +522,16 @@ function DialogBox({ dkey, onChoose, onClose }: { dkey: string; onChoose: (n: st
             <p onClick={() => setN(node.text.length)} className="text-sm leading-relaxed mt-1 min-h-[3.5rem] cursor-pointer">{node.text.slice(0, n)}</p>
           </div>
         </div>
+        {done && node.icons && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {node.icons.map((ic) => (
+              <span key={ic.slug} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1 text-black text-xs font-bold">
+                <svg role="img" viewBox="0 0 24 24" width="20" height="20" aria-label={ic.title}><path d={ic.path} fill={"#" + ic.hex} /></svg>
+                {ic.title}
+              </span>
+            ))}
+          </div>
+        )}
         {done && node.link && (
           <a href={node.link.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block px-4 py-2 rounded-lg text-sm font-bold text-black" style={{ background: color }}>{node.link.label} ↗</a>
         )}
