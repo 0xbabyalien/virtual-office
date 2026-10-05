@@ -1,10 +1,9 @@
 import type { NextConfig } from "next";
-
+const isProd = process.env.NODE_ENV === "production";
 const nextConfig: NextConfig = {
   output: "export",
-  basePath: "/virtual-office",
   images: { unoptimized: true },
-  trailingSlash: true,
+  basePath: isProd ? "/virtual-office" : "",
+  assetPrefix: isProd ? "/virtual-office/" : "",
 };
-
 export default nextConfig;
