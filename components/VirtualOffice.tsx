@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { SimpleIcon } from "simple-icons";
+import { X_HANDLE, QUEST_POST, X_PROFILE, parseProfile, parseStatus } from "./quests";
+import { googleLogin, walletLogin, loadGoogle, type User } from "./auth";
 import { siReact, siNextdotjs, siTypescript, siTailwindcss, siNodedotjs, siPostgresql, siFirebase, siFigma, siGit, siGithub, siGmail, siX } from "simple-icons";
 
 const TILE = 32;
@@ -241,7 +243,8 @@ function drawChar(
   dir: Dir,
   moving: boolean,
   type: Char,
-  tag = true
+  tag = true,
+  nameOverride?: string
 ) {
   const c = PAL[type];
   const bob = moving ? Math.abs(Math.sin(f * 0.3)) * 1.5 : Math.sin(f * 0.08) * 0.8;
@@ -372,15 +375,16 @@ function drawChar(
   const hairTop = type === "ryuk" ? -15 : -7;
   const ty = y + 28 + (hairTop - 30) * S - 6;
   ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
-  const w = ctx.measureText(t.name).width + 10;
+  const nm = nameOverride ?? t.name;
+  const w = ctx.measureText(nm).width + 10;
   ctx.fillStyle = "rgba(10,10,15,0.8)"; ctx.fillRect(x + 12 - w / 2, ty - 10, w, 13);
   ctx.fillStyle = t.color; ctx.fillRect(x + 12 - w / 2, ty + 3, w, 2);
-  ctx.fillStyle = "#fff"; ctx.fillText(t.name, x + 12, ty);
+  ctx.fillStyle = "#fff"; ctx.fillText(nm, x + 12, ty);
 }
 
 // ====== DIALOG ======
-type Choice = { label: string; next: string | null };
-type DNode = { text: string; choices: Choice[]; link?: { label: string; url: string }; icons?: SimpleIcon[] };
+type Choice = { label: string; next: string | null; action?: "google" | "wallet" | "logout" | "claim" | "submit"; quest?: string };
+type DNode = { text: string; choices: Choice[]; link?: { label: string; url: string }; icons?: SimpleIcon[]; input?: { placeholder: string; quest: string } };
 
 const DIALOGS: Record<string, DNode> = {
   "l.start": { text: "Light-kun. Hm. You look awfully calm for someone who is being watched.", choices: [
@@ -423,7 +427,38 @@ const DIALOGS: Record<string, DNode> = {
   "ryuk.start": { text: "Kukuku... humans are always so interesting. Did you bring an apple? No? How boring.", choices: [
     { label: "You can eat apples in this world?", next: "ryuk.apple" },
     { label: "Why are you following me?", next: "ryuk.why" },
+    { label: "Can I sign in?", next: "ryuk.login" },
     { label: "I'm heading out.", next: "ryuk.bye" } ] },
+  "ryuk.login": { text: "Kukuku... want your name written in my notebook? Choose how you'll sign in, human.", choices: [
+    { label: "Sign in with Google", next: null, action: "google" },
+    { label: "Connect crypto wallet", next: null, action: "wallet" },
+    { label: "Maybe later", next: null } ] },
+  "ryuk.welcome": { text: "Kukuku... {name}. Your name is written down now. I will remember you.", choices: [
+    { label: "See Ryuk's quests", next: "ryuk.quests" },
+    { label: "Later", next: null } ] },
+  "ryuk.quests": { text: "Kukuku... finish my X quests, human. Progress: {progress}. Pick one.", choices: [
+    { label: "Follow on X", next: "ryuk.q.follow", quest: "follow" },
+    { label: "Like the post", next: "ryuk.q.like", quest: "like" },
+    { label: "Retweet the post", next: "ryuk.q.retweet", quest: "retweet" },
+    { label: "Reply to the post", next: "ryuk.q.reply", quest: "reply" },
+    { label: "Not now", next: null } ] },
+  "ryuk.q.follow": { text: `Follow @${X_HANDLE} on X, then paste your own profile link below so I know who you are.`, link: { label: "Open profile", url: X_PROFILE }, icons: [siX],
+    input: { placeholder: "https://x.com/yourname", quest: "follow" }, choices: [{ label: "Back", next: "ryuk.quests" }] },
+  "ryuk.q.like": { text: "Like the post. X leaves no link for a like, so I'll take your word for it.", link: { label: "Open post", url: QUEST_POST }, icons: [siX],
+    choices: [{ label: "I've liked it", next: null, action: "claim", quest: "like" }, { label: "Back", next: "ryuk.quests" }] },
+  "ryuk.q.retweet": { text: "Retweet the post. A plain retweet has no link either, so I'll take your word for it.", link: { label: "Open post", url: QUEST_POST }, icons: [siX],
+    choices: [{ label: "I've retweeted it", next: null, action: "claim", quest: "retweet" }, { label: "Back", next: "ryuk.quests" }] },
+  "ryuk.q.reply": { text: "Reply to the post, then paste the link to your reply (x.com/yourname/status/...).", link: { label: "Open post", url: QUEST_POST }, icons: [siX],
+    input: { placeholder: "https://x.com/yourname/status/123...", quest: "reply" }, choices: [{ label: "Back", next: "ryuk.quests" }] },
+  "ryuk.qfail": { text: "Hmm. {error}", choices: [{ label: "Back to quests", next: "ryuk.quests" }, { label: "Close", next: null }] },
+  "ryuk.complete": { text: "Kukuku... all four quests done, {name}. You amuse me, human.", choices: [] },
+  "ryuk.fail": { text: "Hmm, that didn't work. {error}", choices: [
+    { label: "Try again", next: "ryuk.login" },
+    { label: "Close", next: null } ] },
+  "ryuk.account": { text: "Kukuku... {name}, you're already in my notebook. Shall I erase your name?", choices: [
+    { label: "See Ryuk's quests", next: "ryuk.quests" },
+    { label: "Erase my name (sign out)", next: null, action: "logout" },
+    { label: "Leave it", next: null } ] },
   "ryuk.apple": { text: "Apples in your world taste amazing. Bring me one and I'll be very happy.", choices: [
     { label: "I'll find one for you.", next: "ryuk.promise" },
     { label: "It's just a fruit.", next: "ryuk.fruit" } ] },
@@ -483,12 +518,15 @@ function Portrait({ who }: { who: string }) {
   return <canvas ref={ref} width={96} height={104} className="w-20 h-auto block" style={{ imageRendering: "pixelated" }} />;
 }
 
-function DialogBox({ dkey, onChoose, onClose }: { dkey: string; onChoose: (n: string | null) => void; onClose: () => void }) {
+function DialogBox({ dkey, vars, onChoose, onClose }: { dkey: string; vars: { name: string; error: string; progress: string; done: string[] }; onChoose: (c: Choice, value?: string) => void; onClose: () => void }) {
   const node = DIALOGS[dkey];
+  const text = node.text.replace("{name}", vars.name).replace("{error}", vars.error).replace("{progress}", vars.progress);
+  const inp = node.input;
+  const [val, setVal] = useState("");
   const who = dkey.split(".")[0];
   const color = speakerColor(who);
   const [n, setN] = useState(0);
-  const done = n >= node.text.length;
+  const done = n >= text.length;
   const choices: Choice[] = node.choices.length ? node.choices : [{ label: "Close", next: null }];
 
   useEffect(() => {
@@ -501,10 +539,11 @@ function DialogBox({ dkey, onChoose, onClose }: { dkey: string; onChoose: (n: st
     const h = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
       if (k === "escape") return onClose();
-      if (!done) { if (k === "e" || k === "enter" || k === " ") setN(node.text.length); return; }
-      if ((k === "e" || k === "enter") && choices.length === 1) return onChoose(choices[0].next);
+      if ((e.target as HTMLElement)?.tagName === "INPUT") return; // typing in the link box
+      if (!done) { if (k === "e" || k === "enter" || k === " ") setN(text.length); return; }
+      if ((k === "e" || k === "enter") && choices.length === 1) return onChoose(choices[0]);
       const i = parseInt(k, 10) - 1;
-      if (choices[i]) onChoose(choices[i].next);
+      if (choices[i]) onChoose(choices[i]);
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -517,7 +556,7 @@ function DialogBox({ dkey, onChoose, onClose }: { dkey: string; onChoose: (n: st
           <div className="shrink-0 rounded-lg overflow-hidden self-start" style={{ background: color + "26" }}><Portrait who={who} /></div>
           <div className="flex-1 min-w-0">
             <div className="font-mono font-bold text-sm" style={{ color }}>{speakerName(who)}</div>
-            <p onClick={() => setN(node.text.length)} className="text-sm leading-relaxed mt-1 min-h-[3.5rem] cursor-pointer">{node.text.slice(0, n)}</p>
+            <p onClick={() => setN(text.length)} className="text-sm leading-relaxed mt-1 min-h-[3.5rem] cursor-pointer">{text.slice(0, n)}</p>
           </div>
         </div>
         {done && node.icons && (
@@ -545,11 +584,19 @@ function DialogBox({ dkey, onChoose, onClose }: { dkey: string; onChoose: (n: st
             })}
           </div>
         )}
+        {done && inp && (
+          <div className="mt-3 flex gap-2">
+            <input value={val} onChange={(e) => setVal(e.target.value)} placeholder={inp.placeholder} autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              onKeyDown={(e) => e.key === "Enter" && onChoose({ label: "Check", next: null, action: "submit", quest: inp.quest }, val)}
+              className="flex-1 min-w-0 px-3 py-2 rounded-lg text-black text-sm" />
+            <button onClick={() => onChoose({ label: "Check", next: null, action: "submit", quest: inp.quest }, val)} className="px-4 rounded-lg bg-red-600 text-sm font-bold">Check link</button>
+          </div>
+        )}
         {done ? (
           <div className="mt-3 flex flex-col gap-2">
             {choices.map((c, i) => (
-              <button key={c.label} onClick={() => onChoose(c.next)} className="text-left px-3 py-3 rounded-lg bg-white/10 active:bg-white/25 text-sm">
-                {choices.length > 1 ? `${i + 1}. ` : ""}{c.label}
+              <button key={c.label} onClick={() => onChoose(c)} className="text-left px-3 py-3 rounded-lg bg-white/10 active:bg-white/25 text-sm">
+                {choices.length > 1 ? `${i + 1}. ` : ""}{c.quest && vars.done.includes(c.quest) ? "✓ " : ""}{c.label}
               </button>
             ))}
           </div>
@@ -573,8 +620,66 @@ export default function VirtualOffice() {
   const [target, setTarget] = useState<string | null>(null);
   const [dlg, setDlg] = useState<string | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
+  const [user, setUser] = useState<User | null>(null);
+  const [err, setErr] = useState("");
+  const userRef = useRef<User | null>(null);
+  const busy = useRef(false);
+  const USER_KEY = "vo-user";
+  const QUEST_KEY = "vo-quests";
+  const [quests, setQuests] = useState<Record<string, string>>({});
+  const questsRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    loadGoogle().catch(() => {});
+    try {
+      const s = localStorage.getItem(USER_KEY);
+      if (s) { const u = JSON.parse(s) as User; const q = JSON.parse(localStorage.getItem(QUEST_KEY) ?? "{}") as Record<string, string>; userRef.current = u; questsRef.current = q; setUser(u); setQuests(q); } // eslint-disable-line react-hooks/set-state-in-effect
+    } catch {}
+  }, []);
+
+  const saveUser = (u: User | null) => {
+    userRef.current = u; setUser(u);
+    try { if (u) localStorage.setItem(USER_KEY, JSON.stringify(u)); else localStorage.removeItem(USER_KEY); } catch {}
+  };
+  const saveQuest = (id: string, proof: string | null) => {
+    const q = proof === null ? {} : { ...questsRef.current, [id]: proof };
+    questsRef.current = q; setQuests(q);
+    try { if (proof === null) localStorage.removeItem(QUEST_KEY); else localStorage.setItem(QUEST_KEY, JSON.stringify(q)); } catch {}
+    return Object.keys(q).length;
+  };
+  const choose = (c: Choice, value?: string) => {
+    if (!c.action) return openDialog(c.next);
+    if ((c.action === "claim" || c.action === "submit") && !userRef.current) return openDialog("ryuk.login"); // quests need sign-in
+    if (c.action === "logout") { saveUser(null); saveQuest("", null); return openDialog(c.next); }
+    if (c.action === "claim" && c.quest) return openDialog(saveQuest(c.quest, "claimed") >= 4 ? "ryuk.complete" : "ryuk.quests");
+    if (c.action === "submit" && c.quest) {
+      const fail = (m: string) => { setErr(m); openDialog("ryuk.qfail"); };
+      const v = value ?? "";
+      const me = questsRef.current.follow;
+      if (c.quest === "follow") {
+        const h = parseProfile(v);
+        if (!h) return fail("That isn't an X profile link. Use the form https://x.com/yourname.");
+        if (h.toLowerCase() === X_HANDLE.toLowerCase()) return fail("That's my profile. Paste YOUR profile link.");
+        return openDialog(saveQuest("follow", h) >= 4 ? "ryuk.complete" : "ryuk.quests");
+      }
+      if (!me) return fail("Finish the Follow quest first so I know your handle.");
+      const st = parseStatus(v);
+      if (!st) return fail("That isn't a post link. Use the form https://x.com/yourname/status/123...");
+      if (st.handle.toLowerCase() !== me.toLowerCase()) return fail(`That reply belongs to @${st.handle}, not @${me}.`);
+      if (QUEST_POST.endsWith("/" + st.id)) return fail("That's the original post. Paste the link to your reply.");
+      return openDialog(saveQuest("reply", st.id) >= 4 ? "ryuk.complete" : "ryuk.quests");
+    }
+    if (busy.current) return;
+    busy.current = true;
+    (c.action === "google" ? googleLogin() : walletLogin())
+      .then((u) => { saveUser(u); setErr(""); if (talkingRef.current === "ryuk") openDialog("ryuk.welcome"); })
+      .catch((e) => { setErr(e instanceof Error ? e.message : "Sign-in failed."); if (talkingRef.current === "ryuk") openDialog("ryuk.fail"); })
+      .finally(() => { busy.current = false; });
+  };
 
   const openDialog = (key: string | null) => {
+    if (key === "ryuk.login" && userRef.current) key = "ryuk.account";
+    if (key?.startsWith("ryuk.q") && !userRef.current) key = "ryuk.login";
     talkingRef.current = key ? key.split(".")[0] : null;
     if (key) {
       keys.current = {};
@@ -695,7 +800,7 @@ export default function VirtualOffice() {
         ...bots.map((b) => ({ x: b.x, y: b.y, dir: b.dir, type: b.type, moving: talking !== b.type })),
         { x: p.x, y: p.y, dir: p.dir, type: "light" as Char, moving },
       ].sort((a, b) => a.y - b.y);
-      all.forEach((e) => drawChar(ctx, frame, e.x, e.y, e.dir, e.moving, e.type));
+      all.forEach((e) => drawChar(ctx, frame, e.x, e.y, e.dir, e.moving, e.type, true, e.type === "light" ? userRef.current?.name.slice(0, 16) : undefined));
 
       // Floating portfolio icon at each spot (green check = already visited)
       for (const h of HOTSPOTS) {
@@ -770,6 +875,12 @@ export default function VirtualOffice() {
         <h1 className="font-mono font-black text-2xl">{PROFILE.name}</h1>
         <p className="text-sm text-red-400 font-semibold">{PROFILE.role}</p>
         <p className="text-[11px] opacity-70 mt-1">{PROFILE.tagline}</p>
+        {user && (
+          <p className="text-[11px] mt-1 text-emerald-400">
+            Signed in as {user.name} ({user.provider === "google" ? "Google" : "wallet"}){" "}
+            <button onClick={() => choose({ label: "", next: null, action: "logout" })} className="underline">Sign out</button>
+          </p>
+        )}
       </header>
       <div className="w-full max-w-[720px] aspect-[1.6/1] border-4 border-white rounded-xl overflow-hidden shadow-2xl bg-black">
         <canvas ref={canvasRef} width={640} height={400} className="w-full h-full block" style={{ imageRendering: "pixelated" }} />
@@ -802,7 +913,8 @@ export default function VirtualOffice() {
         <DialogBox
           key={dlg}
           dkey={dlg}
-          onChoose={(next) => openDialog(next)}
+          vars={{ name: user?.name ?? "human", error: err, progress: `${Object.keys(quests).length}/4`, done: Object.keys(quests) }}
+          onChoose={choose}
           onClose={() => openDialog(null)}
         />
       )}
