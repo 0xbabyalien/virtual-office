@@ -158,7 +158,7 @@ const customLinkedin: SimpleIcon = {
 type Item = { title: string; text: string; link?: { label: string; url: string }; icons?: SimpleIcon[] };
 type Hotspot = { id: string; label: string; emoji: string; color: string; at: [number, number]; pin: [number, number]; r: number; intro?: string; items?: Item[] };
 const PROFILE = {
-  name: "0xbabyalien",
+  name: "Death Note",
   role: "Web Developer & UI Designer",
   tagline: "Welcome to my virtual office. Walk around, step up to an icon, then press the action button (or E).",
 };
@@ -808,4 +808,4 @@ export default function VirtualOffice() {
       )}
     </div>
   );
-}
+          }
