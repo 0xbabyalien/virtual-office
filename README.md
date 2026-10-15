@@ -1,5 +1,6 @@
 # Virtual Office
 
+![picture](.github/asset/virtual-office.jpg)
 An interactive 2D portfolio. Instead of a plain page, visitors walk through a pixel-art office, talk to characters, and step up to icons to read about the owner's profile, projects, skills, and contact details. The theme is Death Note: the visitor plays **Light**, and **L**, **Misa**, and **Ryuk** wander around the office.
 
 Live site: https://0xbabyalien.github.io/virtual-office/
